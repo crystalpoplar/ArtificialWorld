@@ -1,4 +1,9 @@
+import traceback
+import re
+import logger
 import file_management
+
+mainLog = logger.mainLog
 
 def make_list_comma_separated(list):
     """
@@ -79,3 +84,137 @@ def getValuesFromJson(keys, jsonFilePath):
     values = tuple(get_nested_value(jsonData, key) if isinstance(key, list) else jsonData.get(key, None) for key in keys)
     
     return values
+
+def stringFormatter(string: str) -> str:
+    """
+    Replace placeholders in the input string:
+      - {functionName} -> call a zero-argument function with that name from globals() and substitute its return value
+      - [LOOKUP]        -> lookup value from globals() or JSON files with special prefix DICT.<file>.<key1>.<key2>...
+    
+    Behavior and improvements:
+      - Uses regular expressions with callback functions for efficient single-pass replacements.
+      - Performs iterative passes (up to max_passes) to resolve placeholders introduced by replacements,
+        preventing infinite loops by bounding iterations.
+      - Robustly handles missing functions/values and logs warnings/errors to mainLog.
+      - Supports nested dict lookups in JSON files and nested attribute/key access for globals variables.
+      - Normalizes replacement values to strings and strips newlines/tabs.
+    """
+
+    max_passes = 5  # limit to avoid infinite recursion loops
+    pass_num = 0
+
+    if not isinstance(string, str):
+        mainLog.debug("stringFormatter received non-str input; converting to str")
+        string = str(string)
+
+    func_pattern = re.compile(r'\{([^{}]+)\}')
+    lookup_pattern = re.compile(r'\[([^\[\]]+)\]')
+
+    def _format_value(val):
+        """Normalize various types to a safe string representation."""
+        if val is None:
+            return ''
+        if isinstance(val, bool):
+            return str(val).lower()
+        if isinstance(val, (int, float)):
+            return str(val)
+        if isinstance(val, list):
+            return ', '.join(str(x) for x in val)
+        if isinstance(val, dict):
+            return ', '.join(f"{k}: {v}" for k, v in val.items())
+        # other types -> string, sanitize whitespace/newlines/tabs
+        s = str(val)
+        return s.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')
+
+    def _replace_function(match):
+        name = match.group(1).strip()
+        func_name = name.split('(')[0].strip()
+        func = globals().get(func_name)
+        if not callable(func):
+            mainLog.warning(f"stringFormatter: function '{func_name}' not found or not callable")
+            return ''
+        try:
+            result = func()
+            formatted = _format_value(result)
+            mainLog.debug(f"stringFormatter: replaced function {{{name}}} -> '{formatted}'")
+            return formatted
+        except Exception as e:
+            mainLog.error(f"stringFormatter: error calling function '{func_name}': {e}")
+            mainLog.error(traceback.format_exc())
+            return ''
+
+    def _resolve_dict_lookup(dict_name: str, keys):
+        """Load a JSON file and traverse nested keys."""
+        try:
+            jsonData = file_management.getJsonDict(dict_name + '.json')
+        except Exception as e:
+            mainLog.error(f"stringFormatter: error loading JSON '{dict_name}.json': {e}")
+            return None
+        data = jsonData
+        for k in keys:
+            if isinstance(data, dict):
+                data = data.get(k, None)
+            else:
+                return None
+        return data
+
+    def _resolve_global_lookup(parts):
+        """Resolve nested lookups in globals (dict keys or attributes)."""
+        obj = globals().get(parts[0])
+        if obj is None:
+            return None
+        for p in parts[1:]:
+            if isinstance(obj, dict):
+                obj = obj.get(p, None)
+            else:
+                # try attribute access
+                obj = getattr(obj, p, None)
+            if obj is None:
+                return None
+        return obj
+
+    def _replace_lookup(match):
+        content = match.group(1).strip()
+        try:
+            if content.startswith('DICT.'):
+                # DICT.filename.key1.key2...
+                rest = content[len('DICT.'):].strip()
+                parts = rest.split('.')
+                dict_name = parts[0]
+                keys = parts[1:] if len(parts) > 1 else []
+                val = _resolve_dict_lookup(dict_name, keys)
+            else:
+                parts = content.split('.')
+                val = _resolve_global_lookup(parts)
+            formatted = _format_value(val)
+            mainLog.debug(f"stringFormatter: replaced lookup [{content}] -> '{formatted}'")
+            return formatted
+        except Exception as e:
+            mainLog.error(f"stringFormatter: error resolving lookup '[{content}]': {e}")
+            mainLog.error(traceback.format_exc())
+            return ''
+
+    # Iteratively replace until stable or max_passes reached
+    previous = None
+    while pass_num < max_passes and string != previous:
+        previous = string
+        # Replace function placeholders
+        try:
+            string = func_pattern.sub(_replace_function, string)
+        except Exception as e:
+            mainLog.error(f"stringFormatter: error during function replacements: {e}")
+            mainLog.error(traceback.format_exc())
+            break
+        # Replace lookup placeholders
+        try:
+            string = lookup_pattern.sub(_replace_lookup, string)
+        except Exception as e:
+            mainLog.error(f"stringFormatter: error during lookup replacements: {e}")
+            mainLog.error(traceback.format_exc())
+            break
+        pass_num += 1
+
+    if pass_num == max_passes:
+        mainLog.warning("stringFormatter: maximum passes reached; result may still contain unresolved placeholders")
+
+    return string
