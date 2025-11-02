@@ -62,3 +62,24 @@ def laterTime(curtime: str, laterMins: int) -> str:
     # Return the formatted time string
     return f"{new_hour}:{str(new_min).zfill(2)}"
 
+def ampmTime(militaryTime):
+    """
+    Converts military time to AM/PM format.
+
+    Parameters:
+        militaryTime (str): The military time in HH:MM format.
+
+    Returns:
+        str: The time in AM/PM format.
+    """
+    hour = int(militaryTime.split(':')[0])
+    minute = int(militaryTime.split(':')[1])
+    ampm = 'am'
+    if hour >= 12:
+        if hour == 24:
+            ampm = 'am'
+        else:
+            ampm = 'pm'
+    if hour > 12:
+        hour -= 12
+    return str(hour) + ':' + str(minute).zfill(2) + ampm
