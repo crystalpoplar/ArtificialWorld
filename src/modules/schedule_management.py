@@ -1,3 +1,5 @@
+from datetime import datetime
+
 def earlierTime(curtime: str, earlierMins: int) -> str:
     """
     Calculates the time that is a specified number of minutes earlier than the given time,
@@ -83,3 +85,22 @@ def ampmTime(militaryTime):
     if hour > 12:
         hour -= 12
     return str(hour) + ':' + str(minute).zfill(2) + ampm
+
+def TimePassedYet(timesrch):
+    """
+    Checks if the specified time has passed.
+
+    Parameters:
+        timesrch (str): The time to check in HH:MM format.
+
+    Returns:
+        bool: True if the time has passed, False otherwise.
+    """
+    curtime = datetime.now()
+    TimePassed = False
+    if int(timesrch.split(':')[0]) < int(curtime.hour):
+        TimePassed = True
+    elif int(timesrch.split(':')[0]) == int(curtime.hour):
+        if int(timesrch.split(':')[1]) <= int(curtime.minute):
+            TimePassed = True
+    return TimePassed
