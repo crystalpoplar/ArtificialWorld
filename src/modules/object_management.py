@@ -31,3 +31,20 @@ def list2csv(list_check):
         return csv_list[1:]
     else:
         return list_check
+
+def makeTextJson(textStr):
+    """
+    Converts a text string to JSON format.
+
+    Parameters:
+        textStr (str): The text string to convert.
+
+    Returns:
+        str: The JSON string.
+    """
+    while textStr[0] != '{' and len(textStr) > 0:
+        textStr = textStr[1:]
+    while textStr[-1] != '}' and len(textStr) > 0:
+        textStr = textStr[:-1]
+    return textStr
+
