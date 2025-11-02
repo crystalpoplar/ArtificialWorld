@@ -72,39 +72,6 @@ def updateJsonFile(new_data, filepath):
 
 def archiveFiles(fileName, archiveCount=10):
     """
-    Archives the specified file.
-
-    Parameters:
-        fileName (str): The name of the file to archive.
-        archiveCount (int): The number of archive versions to keep.
-    """
-    maxArchives = archiveCount
-    while archiveCount >= 0:
-        archiveFileName = value_setter.archiveDir + fileName.split('.')[0] + str(archiveCount) + '.' + fileName.split('.')[1]
-        NewarchiveFileName = value_setter.archiveDir + fileName.split('.')[0] + str(archiveCount + 1) + '.' + fileName.split('.')[1]
-        if os.path.isfile(archiveFileName):
-            if archiveCount + 1 <= maxArchives:
-                try:
-                    shutil.copyfile(archiveFileName, NewarchiveFileName)
-                except Exception as e:
-                    fm_log.error(f'Error archiving file: {e}')
-        archiveCount -= 1
-    try:
-        if os.path.isfile(fileName):
-            # Ensure the directory exists
-            dir_path = os.path.dirname(value_setter.archiveDir + fileName.strip(value_setter.mainDir))
-            if not os.path.isdir(dir_path):
-                fm_log.info(f'Creating directory: {dir_path}')
-                os.makedirs(dir_path)
-            try:
-                shutil.copyfile(fileName, value_setter.archiveDir + fileName.strip(value_setter.mainDir).split('.')[0] + '0.' + fileName.split('.')[1])
-            except Exception as e:
-                fm_log.error(f'Error archiving file: {e}')
-    except Exception as e:
-        fm_log.error(f'Error archiving file: {e}')
-
-def archiveFiles(fileName, archiveCount=10):
-    """
     Archives the specified file by keeping up to `archiveCount` versions.
     Older archives are shifted up by one index, and the latest file is saved as archive 0.
 
