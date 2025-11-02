@@ -1,4 +1,4 @@
-def makeListbeCommaSeparated(list):
+def make_list_comma_separated(list):
     """
     Converts a list to a comma-separated string.
 
