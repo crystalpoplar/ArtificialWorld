@@ -218,3 +218,33 @@ def stringFormatter(string: str) -> str:
         mainLog.warning("stringFormatter: maximum passes reached; result may still contain unresolved placeholders")
 
     return string
+
+def executeFunctionInString(string):
+    """
+    This function replaces placeholders in the format {functionName} within the input string
+    with the result of calling the corresponding function.
+
+    Arguments:
+    string (str): The input string containing placeholders.
+
+    Returns:
+    str: The string with placeholders replaced by function results.
+    """
+    while '{' in string and '}' in string:
+        try:
+            # Extract the function name from the placeholder
+            function_name = string.split('{')[1].split('}')[0]
+            # Get the function object from the global scope
+            function_result = globals().get(function_name.split('(')[0])
+            if function_result:
+                # Call the function and get the result
+                function_string = function_result()
+                # Replace the placeholder with the function result
+                string = string.replace(f'{{{function_name}}}', function_string)
+            else:
+                raise ValueError(f"Function '{function_name}' not found.")
+        except Exception as e:
+            # Handle any errors that occur during function execution
+            print(f"Error executing function '{function_name}': {e}")
+            break
+    return string
