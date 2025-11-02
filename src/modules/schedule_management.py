@@ -104,3 +104,12 @@ def TimePassedYet(timesrch):
         if int(timesrch.split(':')[1]) <= int(curtime.minute):
             TimePassed = True
     return TimePassed
+
+def get_current_day():
+    """
+    Returns the current day of the week as a string.
+
+    Returns:
+        str: The current day of the week (e.g., "Monday", "Tuesday").
+    """
+    return datetime.now().strftime("%A")
