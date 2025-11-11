@@ -1,6 +1,6 @@
 import traceback
 import re
-import logger
+import logger as logger
 import file_management
 
 mainLog = logger.mainLog
@@ -132,7 +132,7 @@ def stringFormatter(string: str) -> str:
         func = globals().get(func_name)
         if not callable(func):
             mainLog.warning(f"stringFormatter: function '{func_name}' not found or not callable")
-            return ''
+            return match.group(0)  # leave the original placeholder intact
         try:
             result = func()
             formatted = _format_value(result)
@@ -141,12 +141,12 @@ def stringFormatter(string: str) -> str:
         except Exception as e:
             mainLog.error(f"stringFormatter: error calling function '{func_name}': {e}")
             mainLog.error(traceback.format_exc())
-            return ''
+            return match.group(0)  # safe fallback
 
     def _resolve_dict_lookup(dict_name: str, keys):
         """Load a JSON file and traverse nested keys."""
         try:
-            jsonData = file_management.getJsonDict(dict_name + '.json')
+            jsonData = file_management.getJsonDict(f"{dict_name}.json")
         except Exception as e:
             mainLog.error(f"stringFormatter: error loading JSON '{dict_name}.json': {e}")
             return None
@@ -192,7 +192,7 @@ def stringFormatter(string: str) -> str:
         except Exception as e:
             mainLog.error(f"stringFormatter: error resolving lookup '[{content}]': {e}")
             mainLog.error(traceback.format_exc())
-            return ''
+            return match.group(0)  # safe fallback
 
     # Iteratively replace until stable or max_passes reached
     previous = None

@@ -4,7 +4,7 @@ import json
 import traceback
 from tempfile import NamedTemporaryFile
 import value_setter
-import logger
+import logger as logger
 
 fm_log = logger.mainLog
 

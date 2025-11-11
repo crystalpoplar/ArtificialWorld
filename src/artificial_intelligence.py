@@ -1,5 +1,5 @@
 import traceback
-import logger
+import logger as logger
 
 mainLog = logger.mainLog
 
