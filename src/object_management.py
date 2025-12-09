@@ -248,3 +248,57 @@ def executeFunctionInString(string):
             print(f"Error executing function '{function_name}': {e}")
             break
     return string
+
+def largeSentenceDisplay(text, maxLength=190):
+    """
+    Wraps long text lines by breaking them at a maximum length.
+    
+    Takes text that may contain newlines and ensures no line exceeds maxLength
+    characters. Lines longer than maxLength are split into multiple lines.
+    
+    Parameters:
+        text (str): The input text to wrap, may contain newline characters.
+        maxLength (int, optional): Maximum characters per line. Defaults to 190.
+    
+    Returns:
+        str: The wrapped text with newlines inserted to enforce line length limits.
+    
+    Examples:
+        >>> largeSentenceDisplay("short text", 50)
+        'short text\\n'
+        >>> largeSentenceDisplay("a" * 200, 100)
+        # Returns text split into lines of 100 characters each
+    """
+    mainLog.debug(f"largeSentenceDisplay: wrapping text of length {len(text)} with maxLength={maxLength}")
+    
+    # Validate input
+    if not isinstance(text, str):
+        mainLog.warning(f"largeSentenceDisplay: received non-string input of type {type(text)}, converting to string")
+        text = str(text)
+    
+    if maxLength <= 0:
+        mainLog.error(f"largeSentenceDisplay: invalid maxLength={maxLength}, using default 190")
+        maxLength = 190
+    
+    # Split input text by existing newlines
+    textList = text.split('\n')
+    result_lines = []
+    
+    # Process each line
+    for textStr in textList:
+        # If line is within limit, keep as is
+        if len(textStr) <= maxLength:
+            result_lines.append(textStr)
+        else:
+            # Split long line into chunks of maxLength
+            # More efficient than string concatenation in loop
+            chunks = []
+            for i in range(0, len(textStr), maxLength):
+                chunks.append(textStr[i:i + maxLength])
+            result_lines.extend(chunks)
+    
+    # Join all lines with newlines and add final newline
+    newText = '\n'.join(result_lines) + '\n'
+    
+    mainLog.debug(f"largeSentenceDisplay: output has {len(result_lines)} lines")
+    return newText
