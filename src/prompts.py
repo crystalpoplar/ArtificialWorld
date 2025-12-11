@@ -134,21 +134,27 @@ def prompt_text_input(prompt: str, title: str = "Input Required") -> str:
         print("\nInput cancelled.")
         return ""
 
+# ...existing code...
+
 def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str = "Input Required") -> dict:
     """
-    Prompt the user for multiple text inputs in a single window and return a dictionary of responses.
+    Prompt the user for multiple inputs (text, yes/no, checkboxes) in a single window and return a dictionary of responses.
     Uses OS-appropriate UI:
     - Windows: tkinter with scrollable frame
-    - macOS: osascript with multiple text input dialogs (sequential)
+    - macOS: osascript with multiple dialogs (sequential)
     - Linux: terminal input (fallback to terminal on all platforms if GUI unavailable)
     
     Args:
-        questions (list): List of question strings to prompt the user for.
+        questions (list): List of question dictionaries with format:
+            {"question": str, "type": "text"|"yesno"|"checkbox", "default": optional default value}
+            If "type" is omitted, defaults to "text".
         prompt_message (str): Optional message to display at the top of the dialog. Default is "".
         title (str): The title of the dialog window (if applicable). Default is "Input Required".
     
     Returns:
-        dict: Dictionary mapping each question to the user's response. Returns empty dict if cancelled.
+        dict: Dictionary mapping each question to the user's response.
+              Text inputs return strings, yes/no and checkboxes return booleans.
+              Returns empty dict if cancelled.
     """
     os_name = platform.system()
     
@@ -162,8 +168,11 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
             
             def on_submit():
                 nonlocal responses, cancelled
-                for q, entry in entries.items():
-                    responses[q] = entry.get()
+                for q_text, widget in widgets.items():
+                    if isinstance(widget, tk.Entry):
+                        responses[q_text] = widget.get()
+                    else:  # BooleanVar for yesno/checkbox
+                        responses[q_text] = widget.get()
                 root.quit()
             
             def on_cancel():
@@ -208,17 +217,55 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
             canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
             canvas.configure(yscrollcommand=scrollbar.set)
             
-            # Add questions and entry fields
-            entries = {}
-            for i, question in enumerate(questions):
-                label = ttk.Label(scrollable_frame, text=question)
+            # Add questions and input widgets
+            widgets = {}  # Maps question text -> widget
+            first_widget = None
+            
+            for i, q_data in enumerate(questions):
+                # Normalize question format
+                if isinstance(q_data, str):
+                    q_data = {"question": q_data, "type": "text"}
+                
+                q_text = q_data["question"]
+                q_type = q_data.get("type", "text")
+                q_default = q_data.get("default", None)
+                
+                label = ttk.Label(scrollable_frame, text=q_text)
                 label.grid(row=i*2, column=0, sticky=tk.W, pady=(5, 2))
                 
-                entry = ttk.Entry(scrollable_frame, width=50)
-                entry.grid(row=i*2+1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+                if q_type == "text":
+                    entry = ttk.Entry(scrollable_frame, width=50)
+                    if q_default:
+                        entry.insert(0, str(q_default))
+                    entry.grid(row=i*2+1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+                    widgets[q_text] = entry
+                    if first_widget is None:
+                        first_widget = entry
+                        
+                elif q_type == "yesno":
+                    var = tk.BooleanVar(value=q_default if q_default is not None else False)
+                    frame = ttk.Frame(scrollable_frame)
+                    frame.grid(row=i*2+1, column=0, sticky=tk.W, pady=(0, 10))
+                    
+                    yes_radio = ttk.Radiobutton(frame, text="Yes", variable=var, value=True)
+                    yes_radio.pack(side=tk.LEFT, padx=(0, 10))
+                    
+                    no_radio = ttk.Radiobutton(frame, text="No", variable=var, value=False)
+                    no_radio.pack(side=tk.LEFT)
+                    
+                    widgets[q_text] = var
+                    if first_widget is None:
+                        first_widget = yes_radio
+                        
+                elif q_type == "checkbox":
+                    var = tk.BooleanVar(value=q_default if q_default is not None else False)
+                    checkbox = ttk.Checkbutton(scrollable_frame, variable=var)
+                    checkbox.grid(row=i*2+1, column=0, sticky=tk.W, pady=(0, 10))
+                    widgets[q_text] = var
+                    if first_widget is None:
+                        first_widget = checkbox
                 
                 scrollable_frame.columnconfigure(0, weight=1)
-                entries[question] = entry
             
             # Place canvas and scrollbar
             canvas.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -234,10 +281,9 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
             cancel_btn = ttk.Button(button_frame, text="Cancel", command=on_cancel)
             cancel_btn.pack(side=tk.LEFT, padx=5)
             
-            # Focus first entry
-            if entries:
-                first_entry = list(entries.values())[0]
-                first_entry.focus()
+            # Focus first widget
+            if first_widget:
+                first_widget.focus()
             
             # Bind mousewheel for scrolling
             def _on_mousewheel(event):
@@ -271,24 +317,47 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
                 subprocess.run(['osascript', '-e', script], capture_output=True)
             
             # Show sequential dialogs for each question
-            for question in questions:
-                safe_question = question.replace('"', '\\"')
-                safe_title = title.replace('"', '\\"')
-                script = f'display dialog "{safe_question}" default answer "" with title "{safe_title}"'
-                result = subprocess.run(
-                    ['osascript', '-e', script],
-                    capture_output=True,
-                    text=True
-                )
+            for q_data in questions:
+                # Normalize question format
+                if isinstance(q_data, str):
+                    q_data = {"question": q_data, "type": "text"}
                 
-                if result.returncode == 0:
-                    output = result.stdout.strip()
-                    if "text returned:" in output:
-                        answer = output.split("text returned:", 1)[1].strip()
-                        responses[question] = answer
-                else:
-                    # User cancelled
-                    return {}
+                q_text = q_data["question"]
+                q_type = q_data.get("type", "text")
+                q_default = q_data.get("default", None)
+                
+                safe_question = q_text.replace('"', '\\"')
+                safe_title = title.replace('"', '\\"')
+                
+                if q_type == "text":
+                    default_text = str(q_default) if q_default else ""
+                    script = f'display dialog "{safe_question}" default answer "{default_text}" with title "{safe_title}"'
+                    result = subprocess.run(
+                        ['osascript', '-e', script],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0:
+                        output = result.stdout.strip()
+                        if "text returned:" in output:
+                            answer = output.split("text returned:", 1)[1].strip()
+                            responses[q_text] = answer
+                    else:
+                        return {}
+                        
+                elif q_type in ("yesno", "checkbox"):
+                    script = f'display dialog "{safe_question}" buttons {{"No", "Yes"}} default button "Yes" with title "{safe_title}"'
+                    result = subprocess.run(
+                        ['osascript', '-e', script],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if result.returncode == 0:
+                        responses[q_text] = "Yes" in result.stdout
+                    else:
+                        return {}
             
             return responses
             
@@ -303,12 +372,52 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
         if prompt_message:
             print(f"\n{prompt_message}\n")
         
-        for question in questions:
-            answer = input(f"{question}: ").strip()
-            responses[question] = answer
+        for q_data in questions:
+            # Normalize question format
+            if isinstance(q_data, str):
+                q_data = {"question": q_data, "type": "text"}
+            
+            q_text = q_data["question"]
+            q_type = q_data.get("type", "text")
+            q_default = q_data.get("default", None)
+            
+            if q_type == "text":
+                default_str = f" [{q_default}]" if q_default else ""
+                answer = input(f"{q_text}{default_str}: ").strip()
+                if not answer and q_default:
+                    answer = str(q_default)
+                responses[q_text] = answer
+                
+            elif q_type in ("yesno", "checkbox"):
+                while True:
+                    default_str = " [Y/n]" if q_default else " [y/N]"
+                    answer = input(f"{q_text}{default_str}: ").strip().lower()
+                    
+                    if not answer:
+                        responses[q_text] = bool(q_default)
+                        break
+                    elif answer in ('yes', 'y'):
+                        responses[q_text] = True
+                        break
+                    elif answer in ('no', 'n'):
+                        responses[q_text] = False
+                        break
+                    else:
+                        print("Invalid input. Please enter 'yes' or 'no'.")
         
         return responses
         
     except (EOFError, KeyboardInterrupt):
         print("\nInput cancelled.")
         return {}
+
+if __name__ == "__main__":
+    # Example usage
+    print(prompt_yes_no("Do you want to continue?"))
+    print(prompt_text_input("Please enter your name:"))
+    questions = [
+        {"question": "What is your favorite color?", "type": "text", "default": "Blue"},
+        {"question": "Do you like Python?", "type": "yesno", "default": True},
+        {"question": "Subscribe to newsletter?", "type": "checkbox", "default": False}
+    ]
+    print(prompt_multiple_inputs(questions, prompt_message="Please answer the following questions:"))
