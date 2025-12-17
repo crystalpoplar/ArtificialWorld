@@ -578,3 +578,69 @@ def prompt_choice(prompt: str, choices: list, title: str = "Select Option") -> s
                 
     except Exception:
         return ""
+
+def prompt_notification(message: str, title: str = "Notification") -> None:
+    """
+    Display a notification message to the user that can be easily dismissed.
+    Uses OS-appropriate UI:
+    - Windows: tkinter messagebox with single OK button
+    - macOS: osascript notification or dialog
+    - Linux: terminal output (fallback to terminal on all platforms if GUI unavailable)
+    
+    Args:
+        message (str): The notification message to display.
+        title (str): The title of the notification (if applicable). Default is "Notification".
+    
+    Returns:
+        None
+    """
+    os_name = platform.system()
+    
+    if os_name == "Windows":
+        try:
+            import tkinter as tk
+            from tkinter import messagebox
+            
+            # Create a hidden root window
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes('-topmost', True)
+            
+            # Show info message box with OK button
+            messagebox.showinfo(title, message, parent=root)
+            root.destroy()
+            return
+        except Exception:
+            # Fall back to terminal if tkinter fails
+            pass
+    
+    elif os_name == "Darwin":  # macOS
+        try:
+            import subprocess
+            
+            # Use osascript to show native notification
+            # Try notification center first (non-blocking)
+            safe_message = message.replace('"', '\\"')
+            safe_title = title.replace('"', '\\"')
+            
+            try:
+                # Display notification (non-blocking, auto-dismisses)
+                script = f'display notification "{safe_message}" with title "{safe_title}"'
+                subprocess.run(['osascript', '-e', script], capture_output=True, timeout=2)
+                return
+            except:
+                # Fall back to dialog (requires click to dismiss)
+                script = f'display dialog "{safe_message}" buttons {{"OK"}} default button "OK" with title "{safe_title}"'
+                subprocess.run(['osascript', '-e', script], capture_output=True)
+                return
+                
+        except Exception:
+            # Fall back to terminal if osascript fails
+            pass
+    
+    # Linux or fallback: terminal-based notification
+    print(f"\n{'='*60}")
+    print(f"{title.upper()}")
+    print(f"{'='*60}")
+    print(f"{message}")
+    print(f"{'='*60}\n")
