@@ -134,8 +134,6 @@ def prompt_text_input(prompt: str, title: str = "Input Required") -> str:
         print("\nInput cancelled.")
         return ""
 
-# ...existing code...
-
 def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str = "Input Required") -> dict:
     """
     Prompt the user for multiple inputs (text, yes/no, checkboxes) in a single window and return a dictionary of responses.
@@ -411,13 +409,172 @@ def prompt_multiple_inputs(questions: list, prompt_message: str = "", title: str
         print("\nInput cancelled.")
         return {}
 
-if __name__ == "__main__":
-    # Example usage
-    print(prompt_yes_no("Do you want to continue?"))
-    print(prompt_text_input("Please enter your name:"))
-    questions = [
-        {"question": "What is your favorite color?", "type": "text", "default": "Blue"},
-        {"question": "Do you like Python?", "type": "yesno", "default": True},
-        {"question": "Subscribe to newsletter?", "type": "checkbox", "default": False}
-    ]
-    print(prompt_multiple_inputs(questions, prompt_message="Please answer the following questions:"))
+# ...existing code...
+
+def prompt_choice(prompt: str, choices: list, title: str = "Select Option") -> str:
+    """
+    Prompt the user to select one option from a list of choices.
+    Uses OS-appropriate UI:
+    - Windows: tkinter with clickable buttons (one click selection)
+    - macOS: osascript with button list (limited to ~3 choices due to dialog constraints)
+    - Linux: terminal input with numbered menu
+    
+    Args:
+        prompt (str): The prompt message to display to the user.
+        choices (list): List of string choices for the user to select from.
+        title (str): The title of the dialog window (if applicable). Default is "Select Option".
+    
+    Returns:
+        str: The selected choice, or empty string if cancelled/error.
+    """
+    if not choices:
+        return ""
+    
+    os_name = platform.system()
+    
+    if os_name == "Windows":
+        try:
+            import tkinter as tk
+            from tkinter import ttk
+            
+            selected = None
+            
+            def on_choice(choice):
+                nonlocal selected
+                selected = choice
+                root.quit()
+            
+            # Create main window
+            root = tk.Tk()
+            root.title(title)
+            root.attributes('-topmost', True)
+            
+            # Set minimum size
+            root.minsize(300, 150)
+            root.geometry("400x300")
+            
+            # Create main frame
+            main_frame = ttk.Frame(root, padding="10")
+            main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+            
+            # Configure grid weights
+            root.columnconfigure(0, weight=1)
+            root.rowconfigure(0, weight=1)
+            main_frame.columnconfigure(0, weight=1)
+            main_frame.rowconfigure(1, weight=1)
+            
+            # Add prompt message
+            msg_label = ttk.Label(main_frame, text=prompt, wraplength=350)
+            msg_label.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+            
+            # Create canvas and scrollbar for choices
+            canvas = tk.Canvas(main_frame)
+            scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+            scrollable_frame = ttk.Frame(canvas)
+            
+            scrollable_frame.bind(
+                "<Configure>",
+                lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            )
+            
+            canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+            canvas.configure(yscrollcommand=scrollbar.set)
+            
+            # Add clickable buttons for each choice
+            for choice in choices:
+                btn = ttk.Button(
+                    scrollable_frame,
+                    text=choice,
+                    command=lambda c=choice: on_choice(c),
+                    width=40
+                )
+                btn.pack(pady=5, padx=10, fill=tk.X)
+            
+            scrollable_frame.columnconfigure(0, weight=1)
+            
+            # Place canvas and scrollbar
+            canvas.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+            scrollbar.grid(row=1, column=1, sticky=(tk.N, tk.S))
+            
+            # Bind mousewheel for scrolling
+            def _on_mousewheel(event):
+                canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            
+            # Handle window close (X button)
+            root.protocol("WM_DELETE_WINDOW", lambda: on_choice(""))
+            
+            root.mainloop()
+            
+            # Clean up
+            try:
+                canvas.unbind_all("<MouseWheel>")
+            except:
+                pass
+            root.destroy()
+            
+            return selected if selected is not None else ""
+            
+        except Exception:
+            # Fall back to terminal if tkinter fails
+            pass
+    
+    elif os_name == "Darwin":  # macOS
+        try:
+            import subprocess
+            
+            # macOS dialogs are limited in the number of buttons they can display
+            # If there are too many choices, fall back to terminal
+            if len(choices) > 3:
+                pass  # Fall through to terminal implementation
+            else:
+                safe_prompt = prompt.replace('"', '\\"')
+                safe_title = title.replace('"', '\\"')
+                
+                # Build button list
+                buttons = '", "'.join(choice.replace('"', '\\"') for choice in choices)
+                script = f'display dialog "{safe_prompt}" buttons {{"{buttons}"}} default button 1 with title "{safe_title}"'
+                
+                result = subprocess.run(
+                    ['osascript', '-e', script],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode == 0:
+                    # Extract button clicked from output
+                    output = result.stdout.strip()
+                    if "button returned:" in output:
+                        button_text = output.split("button returned:", 1)[1].strip()
+                        return button_text
+                return ""
+                
+        except Exception:
+            # Fall back to terminal if osascript fails
+            pass
+    
+    # Linux or fallback: terminal-based numbered menu
+    try:
+        print(f"\n{prompt}\n")
+        
+        for i, choice in enumerate(choices, 1):
+            print(f"{i}. {choice}")
+        
+        while True:
+            try:
+                answer = input(f"\nEnter choice (1-{len(choices)}): ").strip()
+                
+                if answer.isdigit():
+                    idx = int(answer) - 1
+                    if 0 <= idx < len(choices):
+                        return choices[idx]
+                
+                print(f"Invalid choice. Please enter a number between 1 and {len(choices)}.")
+                
+            except (EOFError, KeyboardInterrupt):
+                print("\nSelection cancelled.")
+                return ""
+                
+    except Exception:
+        return ""
