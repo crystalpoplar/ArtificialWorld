@@ -644,3 +644,224 @@ def prompt_notification(message: str, title: str = "Notification") -> None:
     print(f"{'='*60}")
     print(f"{message}")
     print(f"{'='*60}\n")
+
+def prompt_list_manager(left_list: list, right_list: list, left_title: str = "Available", right_title: str = "Selected", window_title: str = "List Manager") -> tuple:
+    """
+    Display a dual-list manager where users can move items between two lists.
+    Right list takes precedence - duplicates are automatically removed from the left list.
+    Uses OS-appropriate UI:
+    - Windows/macOS/Linux with GUI: tkinter with dual scrollable listboxes and move buttons
+    - Fallback: terminal-based interface
+    
+    Args:
+        left_list (list): Initial items for the left list.
+        right_list (list): Initial items for the right list (takes precedence).
+        left_title (str): Title/label for the left list. Default is "Available".
+        right_title (str): Title/label for the right list. Default is "Selected".
+        window_title (str): Title of the window. Default is "List Manager".
+    
+    Returns:
+        tuple: (left_list, right_list) - The final state of both lists after user interaction.
+               Returns ([], []) if cancelled.
+    """
+    # Remove duplicates - right list takes precedence
+    left_items = [item for item in left_list if item not in right_list]
+    right_items = list(right_list)
+    
+    try:
+        import tkinter as tk
+        from tkinter import ttk
+        
+        result_left = []
+        result_right = []
+        cancelled = False
+        
+        def move_to_right():
+            """Move selected items from left to right."""
+            selection = left_listbox.curselection()
+            if not selection:
+                return
+            
+            # Get selected items (in reverse to maintain indices)
+            items_to_move = [left_listbox.get(i) for i in selection]
+            
+            # Remove from left (in reverse order to maintain indices)
+            for i in reversed(selection):
+                left_listbox.delete(i)
+            
+            # Add to right (avoid duplicates)
+            for item in items_to_move:
+                if item not in right_listbox.get(0, tk.END):
+                    right_listbox.insert(tk.END, item)
+        
+        def move_to_left():
+            """Move selected items from right to left."""
+            selection = right_listbox.curselection()
+            if not selection:
+                return
+            
+            # Get selected items (in reverse to maintain indices)
+            items_to_move = [right_listbox.get(i) for i in selection]
+            
+            # Remove from right (in reverse order to maintain indices)
+            for i in reversed(selection):
+                right_listbox.delete(i)
+            
+            # Add to left (avoid duplicates)
+            for item in items_to_move:
+                if item not in left_listbox.get(0, tk.END):
+                    left_listbox.insert(tk.END, item)
+        
+        def on_ok():
+            """Save changes and close."""
+            nonlocal result_left, result_right
+            result_left = list(left_listbox.get(0, tk.END))
+            result_right = list(right_listbox.get(0, tk.END))
+            root.quit()
+        
+        def on_cancel():
+            """Cancel and close."""
+            nonlocal cancelled
+            cancelled = True
+            root.quit()
+        
+        # Create main window
+        root = tk.Tk()
+        root.title(window_title)
+        root.geometry("700x500")
+        root.minsize(600, 400)
+        
+        # Configure grid weights for resizing
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        
+        # Main container frame
+        main_frame = ttk.Frame(root, padding="10")
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(2, weight=1)
+        main_frame.rowconfigure(1, weight=1)
+        
+        # Left list frame
+        left_frame = ttk.Frame(main_frame)
+        left_frame.grid(row=0, column=0, rowspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
+        left_frame.columnconfigure(0, weight=1)
+        left_frame.rowconfigure(1, weight=1)
+        
+        left_label = ttk.Label(left_frame, text=left_title, font=('TkDefaultFont', 10, 'bold'))
+        left_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        left_scroll = ttk.Scrollbar(left_frame, orient=tk.VERTICAL)
+        left_listbox = tk.Listbox(left_frame, yscrollcommand=left_scroll.set, selectmode=tk.EXTENDED)
+        left_scroll.config(command=left_listbox.yview)
+        left_listbox.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        left_scroll.grid(row=1, column=1, sticky=(tk.N, tk.S))
+        
+        # Populate left listbox
+        for item in left_items:
+            left_listbox.insert(tk.END, item)
+        
+        # Middle buttons frame
+        button_frame = ttk.Frame(main_frame)
+        button_frame.grid(row=1, column=1, padx=10)
+        
+        move_right_btn = ttk.Button(button_frame, text="→", command=move_to_right, width=5)
+        move_right_btn.pack(pady=5)
+        
+        move_left_btn = ttk.Button(button_frame, text="←", command=move_to_left, width=5)
+        move_left_btn.pack(pady=5)
+        
+        # Right list frame
+        right_frame = ttk.Frame(main_frame)
+        right_frame.grid(row=0, column=2, rowspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 0))
+        right_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(1, weight=1)
+        
+        right_label = ttk.Label(right_frame, text=right_title, font=('TkDefaultFont', 10, 'bold'))
+        right_label.grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        
+        right_scroll = ttk.Scrollbar(right_frame, orient=tk.VERTICAL)
+        right_listbox = tk.Listbox(right_frame, yscrollcommand=right_scroll.set, selectmode=tk.EXTENDED)
+        right_scroll.config(command=right_listbox.yview)
+        right_listbox.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        right_scroll.grid(row=1, column=1, sticky=(tk.N, tk.S))
+        
+        # Populate right listbox
+        for item in right_items:
+            right_listbox.insert(tk.END, item)
+        
+        # Bottom buttons frame
+        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame.grid(row=2, column=0, columnspan=3, pady=(10, 0))
+        
+        ok_btn = ttk.Button(bottom_frame, text="OK", command=on_ok)
+        ok_btn.pack(side=tk.LEFT, padx=5)
+        
+        cancel_btn = ttk.Button(bottom_frame, text="Cancel", command=on_cancel)
+        cancel_btn.pack(side=tk.LEFT, padx=5)
+        
+        # Handle window close
+        root.protocol("WM_DELETE_WINDOW", on_cancel)
+        
+        root.mainloop()
+        root.destroy()
+        
+        if cancelled:
+            return ([], [])
+        return (result_left, result_right)
+        
+    except Exception as e:
+        # Fallback to terminal-based interface
+        print(f"\nGUI unavailable, using terminal interface. Error: {e}\n")
+        
+        left_items = [item for item in left_list if item not in right_list]
+        right_items = list(right_list)
+        
+        while True:
+            print(f"\n{'='*60}")
+            print(f"{left_title} (Left) | {right_title} (Right)")
+            print(f"{'='*60}")
+            
+            max_len = max(len(left_items), len(right_items))
+            for i in range(max_len):
+                left_item = left_items[i] if i < len(left_items) else ""
+                right_item = right_items[i] if i < len(right_items) else ""
+                print(f"{i+1:3}. {left_item:25} | {right_item}")
+            
+            print(f"\nCommands:")
+            print(f"  r <index>  - Move item from left to right")
+            print(f"  l <index>  - Move item from right to left")
+            print(f"  ok         - Accept changes")
+            print(f"  cancel     - Cancel changes")
+            
+            try:
+                cmd = input(f"\nEnter command: ").strip().lower()
+                
+                if cmd == "ok":
+                    return (left_items, right_items)
+                elif cmd == "cancel":
+                    return ([], [])
+                elif cmd.startswith("r "):
+                    try:
+                        idx = int(cmd.split()[1]) - 1
+                        if 0 <= idx < len(left_items):
+                            item = left_items.pop(idx)
+                            if item not in right_items:
+                                right_items.append(item)
+                    except (ValueError, IndexError):
+                        print("Invalid index.")
+                elif cmd.startswith("l "):
+                    try:
+                        idx = int(cmd.split()[1]) - 1
+                        if 0 <= idx < len(right_items):
+                            item = right_items.pop(idx)
+                            if item not in left_items:
+                                left_items.append(item)
+                    except (ValueError, IndexError):
+                        print("Invalid index.")
+                else:
+                    print("Invalid command.")
+                    
+            except (EOFError, KeyboardInterrupt):
+                print("\nCancelled.")
+                return ([], [])
